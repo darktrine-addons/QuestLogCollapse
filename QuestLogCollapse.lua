@@ -1351,7 +1351,11 @@ C_Timer.After(1, function()
             if not WorldMapFrame.qlcHooked then
                 WorldMapFrame:HookScript("OnShow", function()
                     DebugPrint("World map opened - checking for pending zone filter")
-                    TryRunZoneFilter()
+                    -- Defer one frame so our code runs outside the map's protected
+                    -- init chain (ShowUIPanel → RefreshAll → secureexecuterange →
+                    -- SetPassThroughButtons). Running addon Lua synchronously inside
+                    -- that chain taints it and blocks SetPassThroughButtons.
+                    C_Timer.After(0, TryRunZoneFilter)
                 end)
                 WorldMapFrame.qlcHooked = true
                 DebugPrint("Hooked WorldMapFrame for zone filtering")
