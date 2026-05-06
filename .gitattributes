@@ -1,0 +1,15 @@
+# Normalise all text files to LF in the repository.
+* text=auto eol=lf
+
+# Lua and text assets — always LF
+*.lua  text eol=lf
+*.toc  text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.xml  text eol=lf
+
+# Binary assets — no conversion
+*.png  binary
+*.blp  binary
+*.mp3  binary
+*.ogg  binary
