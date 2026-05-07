@@ -671,10 +671,10 @@ configEventFrame:SetScript("OnEvent", function(self, event, arg1)
         if not panelRegistered then
             -- Create all panels
             local basicOpts    = CreateBasicOptionsPanel()
-            local instPanel    = BuildContainerPanel("Instance Settings", instanceTypes, false)
-            local pvpPanel     = BuildContainerPanel("PvP Settings",       pvpTypes,     false)
-            local housingPanel = BuildContainerPanel("Player Housing",     housingTypes, false)
-            local legacyPanel  = BuildContainerPanel("Legacy",             legacyTypes,  true)
+            local instPanel    = BuildContainerPanel("Instances", instanceTypes, false)
+            local pvpPanel     = BuildContainerPanel("PvP",      pvpTypes,     false)
+            local housingPanel = BuildContainerPanel("Housing",   housingTypes, false)
+            local legacyPanel  = BuildContainerPanel("Legacy",    legacyTypes,  true)
 
             allPanels = { basicOpts, instPanel, pvpPanel, housingPanel, legacyPanel }
 
@@ -689,9 +689,9 @@ configEventFrame:SetScript("OnEvent", function(self, event, arg1)
                 Settings.RegisterAddOnCategory(subCat)
                 subPanel.categoryID = subCat.ID
             end
-            RegSub(instPanel,    "Instance Settings")
-            RegSub(pvpPanel,     "PvP Settings")
-            RegSub(housingPanel, "Player Housing")
+            RegSub(instPanel,    "Instances")
+            RegSub(pvpPanel,     "PvP")
+            RegSub(housingPanel, "Housing")
             RegSub(legacyPanel,  "Legacy")
 
             panelRegistered = true
