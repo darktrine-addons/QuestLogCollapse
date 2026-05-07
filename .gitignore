@@ -1,4 +1,5 @@
 **/.vscode/*
-**/.github/*
 **/.git*
 !.gitattributes
+!.github
+!.github/**

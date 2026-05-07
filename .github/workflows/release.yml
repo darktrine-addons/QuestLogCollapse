@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build addon zip
+        run: |
+          REPO=$(basename "$GITHUB_REPOSITORY")
+          git archive \
+            --prefix="${REPO}/" \
+            --format=zip \
+            HEAD \
+            -o "${REPO}-${GITHUB_REF_NAME}.zip"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "QuestLogCollapse-*.zip"
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
