@@ -38,7 +38,7 @@ local TAINT_BLACKLIST = {
     -- The entries below remain commented; re-enable if taint errors reappear:
     -- ["Adventure map"]    = true,  -- AdventureMapQuestObjectiveTracker: causes map taint
     -- ["World quest"]      = true,  -- WorldQuestObjectiveTracker: causes map system taint
-    -- ["Bonus objectives"] = true,  -- BonusObjectiveTracker: causes area POI taint
+    ["Bonus objectives"]   = true,  -- BonusObjectiveTracker: SetCollapsed taints UIWidget pool frame widths → LayoutFrame:491 "secret number" on Area POI tooltips
     -- ["Quest"]            = true,  -- QuestObjectiveTracker: may cause widget taint
 }
 
