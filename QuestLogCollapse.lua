@@ -35,11 +35,10 @@ QuestLogCollapse:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 local TAINT_BLACKLIST = {
     ["UI widgets"]          = true,  -- UIWidgetObjectiveTracker: directly manages widget pool frames
     ["Monthly activities"]  = true,  -- MonthlyActivitiesObjectiveTracker: UIWidget status bars for seasonal/event progress
-    -- The entries below remain commented; re-enable if taint errors reappear:
-    -- ["Adventure map"]    = true,  -- AdventureMapQuestObjectiveTracker: causes map taint
-    -- ["World quest"]      = true,  -- WorldQuestObjectiveTracker: causes map system taint
+    ["Adventure map"]      = true,  -- AdventureMapQuestObjectiveTracker: causes world map taint (collapseAdventureMaps defaults false; safety net for users who enable it)
+    ["World quest"]        = true,  -- WorldQuestObjectiveTracker: causes map system taint (collapseWorldQuests defaults false; safety net for users who enable it)
     ["Bonus objectives"]   = true,  -- BonusObjectiveTracker: SetCollapsed taints UIWidget pool frame widths → LayoutFrame:491 "secret number" on Area POI tooltips
-    -- ["Quest"]            = true,  -- QuestObjectiveTracker: may cause widget taint
+    -- ["Quest"]            = true,  -- QuestObjectiveTracker: uncertain taint impact; collapseQuests defaults true for dungeons/raids so blacklisting would silently break the core feature — leave until a specific taint error is confirmed
 }
 
 -- Helper function to check if a value is tainted
