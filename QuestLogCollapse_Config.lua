@@ -1,6 +1,6 @@
 -- QuestLogCollapse Configuration Panel
 -- Author: Gaspode
--- Version: 1.4.0-beta1
+-- Version: 1.4.0-beta2
 
 local addonName, ns = ...
 
@@ -22,7 +22,7 @@ local defaults = {
     },
     dungeons = {
         enabled = true,
-        collapseQuests = true, collapseAchievements = false,
+        collapseQuests = false, collapseAchievements = false,
         collapseBonusObjectives = false, collapseScenarios = false, collapseCampaigns = true,
         collapseProfessions = false, collapseMonthlyActivities = false,
         collapseUIWidgets = false, collapseAdventureMaps = false, collapseWorldQuests = false,
@@ -30,7 +30,7 @@ local defaults = {
     },
     raids = {
         enabled = true,
-        collapseQuests = true, collapseAchievements = false,
+        collapseQuests = false, collapseAchievements = false,
         collapseBonusObjectives = false, collapseScenarios = false, collapseCampaigns = true,
         collapseProfessions = false, collapseMonthlyActivities = false,
         collapseUIWidgets = false, collapseAdventureMaps = false, collapseWorldQuests = false,

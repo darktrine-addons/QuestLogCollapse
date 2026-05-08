@@ -38,7 +38,7 @@ local TAINT_BLACKLIST = {
     ["Adventure map"]      = true,  -- AdventureMapQuestObjectiveTracker: causes world map taint (collapseAdventureMaps defaults false; safety net for users who enable it)
     ["World quest"]        = true,  -- WorldQuestObjectiveTracker: causes map system taint (collapseWorldQuests defaults false; safety net for users who enable it)
     ["Bonus objectives"]   = true,  -- BonusObjectiveTracker: SetCollapsed taints UIWidget pool frame widths → LayoutFrame:491 "secret number" on Area POI tooltips
-    -- ["Quest"]            = true,  -- QuestObjectiveTracker: uncertain taint impact; collapseQuests defaults true for dungeons/raids so blacklisting would silently break the core feature — leave until a specific taint error is confirmed
+    ["Quest"]              = true,  -- QuestObjectiveTracker: tracked quests with UIWidget content (e.g. delve coffer-key timers) taint widget pool frame dimensions → Blizzard_UIWidgetTemplateTextWithState:35 "secret number" on Area POI tooltips (widgetSetID=1800, type=8)
 }
 
 -- Helper function to check if a value is tainted
