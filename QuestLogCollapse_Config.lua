@@ -1,6 +1,6 @@
 -- QuestLogCollapse Configuration Panel
 -- Author: Gaspode
--- Version: 1.4.0-beta2
+-- Version: 1.4.0-beta3
 
 local addonName, ns = ...
 
@@ -525,7 +525,7 @@ local function CreateBasicOptionsPanel()
     Tip(filterQuestsByZoneCheck, "Filter Tracked Quests by Zone",
         "Adjusts which quests appear in your tracker based on your current zone.",
         "Quests with objectives or map markers here are tracked; others are untracked.",
-        "Triggers after a zone change when you open the world map, start moving, mount/dismount, or cast a spell.",
+        "Triggers after a zone change when you start moving, mount/dismount, cast a spell, or interact with the quest tracker.",
         "Use |cffffcc00/qlc filterzone|r to trigger manually.",
         "|cffff9900Note:|r Your original tracked-quest list is saved and can be restored by disabling this option.")
 
