@@ -46,8 +46,7 @@ The addon provides several slash commands for basic control:
 
 ### Combat Behavior
 
-- **Early Combat Detection**: Quest trackers collapse via `PLAYER_ENTER_COMBAT` event (fires before taint protection)
-- **Fallback Collapse**: If early detection fails, attempts immediate collapse during `PLAYER_REGEN_DISABLED`
+- **Immediate Collapse on Combat Start**: Quest trackers collapse during `PLAYER_REGEN_DISABLED`, gated by the runtime `TAINT_BLACKLIST` so blacklisted trackers (e.g. Quest, Bonus objectives) are never poked from addon Lua
 - **Automatic Expansion**: Quest trackers automatically expand when combat ends (only if they were collapsed during combat)
 - **Queue System**: If immediate collapse fails due to taint protection, operations are queued for when combat ends
 - **Smart Overrides**: Use `/qlc expand` during combat to cancel any queued collapse operations
@@ -128,13 +127,11 @@ The addon uses the World of Warcraft API to:
 
 ### Combat Queue System
 
-- **Early Detection**: Uses `PLAYER_ENTER_COMBAT` event for earliest possible collapse (before taint protection)
-- **Dual-Layer Approach**: Fallback to `PLAYER_REGEN_DISABLED` if early detection fails or is incomplete
+- **Single Trigger**: Uses `PLAYER_REGEN_DISABLED` to attempt the collapse synchronously
+- **Blacklist Gating**: Trackers in the runtime `TAINT_BLACKLIST` are skipped on both collapse and expand to avoid known UIWidget pool taint
 - **Smart Expansion**: Tracks which trackers were collapsed during combat and only expands those on combat end
 - **State Preservation**: Maintains quest log state when combat collapse is disabled or no trackers were affected
-- **Taint Prevention**: If both immediate attempts fail, operations are safely queued to prevent addon taint
-- **Operation Queuing**: Queues collapse/expand operations when combat is detected
-- **Automatic Application**: Applies queued operations safely when combat ends
+- **Operation Queuing**: If immediate collapse fails (e.g. tracker not yet built), operations are queued and applied when combat ends
 - **Manual Overrides**: Allows manual cancellation of queued operations
 - **Instance Priority**: Combat operations are ignored when in instances to avoid conflicts
 
@@ -157,19 +154,17 @@ QuestLogCollapse/
 - `PLAYER_STARTED_MOVING` - Triggers pending zone filter when player moves (hardware-initiated)
 - `UNIT_SPELLCAST_SUCCEEDED` - Triggers pending zone filter when player casts spells/abilities (hardware-initiated)
 - `PLAYER_MOUNT_DISPLAY_CHANGED` - Triggers pending zone filter when mounting/dismounting (hardware-initiated)
-- `PLAYER_ENTER_COMBAT` - Early combat detection for immediate collapse (before taint protection)
-- `PLAYER_REGEN_DISABLED` - Handle entering combat (fallback immediate collapse or queue operations)
-- `PLAYER_REGEN_ENABLED` - Handle leaving combat (apply queued operations)
+- `PLAYER_REGEN_DISABLED` - Handle entering combat (immediate collapse, gated by `TAINT_BLACKLIST`)
+- `PLAYER_REGEN_ENABLED` - Handle leaving combat (expand, apply queued operations)
 
-### Zone Filtering Triggers (Taint-Safe)
+### Zone Filtering Triggers
 
-To avoid taint issues with protected quest tracking functions, zone filtering is triggered by user-initiated actions:
+`C_QuestLog.AddQuestWatch` / `RemoveQuestWatch` called from any addon Lua frame leaves taint on the super-tracking refresh chain, which downstream blocks `Button:SetPassThroughButtons` (`ADDON_ACTION_BLOCKED`). The filter triggers are restricted to the two paths that minimize how often this surfaces:
 
-- **Quest Tracker Interaction** - Triggers when you interact with the objective tracker (minimize/expand)
-- **Player Movement** - Triggers when you start moving after a zone change
-- **Spell/Ability Use** - Triggers when you cast any spell or ability (including dynamic flight abilities)
-- **Mounting/Dismounting** - Triggers when your mount state changes
+- **Quest Tracker Interaction** - Run when you minimize or expand the objective tracker
 - **Manual Command** - Use `/qlc filterzone` to trigger anytime
+
+Zone changes only set a "needs filter" flag; the filter runs on the next interaction/manual trigger above. Movement, spell-cast, and mount auto-triggers were removed in 1.4.0 because they reproduced the same taint chain without adding genuinely-secure execution context.
 
 ### Database Structure
 

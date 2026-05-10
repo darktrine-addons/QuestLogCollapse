@@ -170,15 +170,21 @@ end
 -- --------------------------------------------------------
 -- TRACKER SECTION DEFINITIONS  (used by all containers)
 -- --------------------------------------------------------
+-- blacklistName matches the friendly name used in the runtime TAINT_BLACKLIST table
+-- (see QuestLogCollapse.lua). When set and present in ns.TAINT_BLACKLIST at panel build,
+-- the corresponding checkbox is disabled and visually marked so the user understands
+-- the toggle is inert. Saved-vars values are left untouched.
 local SECTIONS_ROW1 = {
     { key = "collapseQuests",
       label = "Quests",
-      tip = "Collapse the Quest tracker (QuestObjectiveTracker).\nShows standard quests with objectives in your current area." },
+      blacklistName = "Quest",
+      tip = "Collapse the Quest tracker (QuestObjectiveTracker).\nShows standard quests with objectives in your current area.\n|cffff9900Caution:|r Tracked quests with UIWidget content (e.g. delve coffer-key timers) taint Area POI tooltip widths. Off by default." },
     { key = "collapseAchievements",
       label = "Achievements",
       tip = "Collapse the Achievement tracker.\nShows progress toward tracked achievement criteria." },
     { key = "collapseBonusObjectives",
       label = "Bonus",
+      blacklistName = "Bonus objectives",
       tip = "Collapse the Bonus Objective tracker.\nShows area bonus objectives and rare encounters.\n|cffff9900Caution:|r Can cause taint on Area POI tooltips in some builds. Off by default." },
     { key = "collapseCampaigns",
       label = "Campaigns",
@@ -190,20 +196,29 @@ local SECTIONS_ROW1 = {
 local SECTIONS_ROW2 = {
     { key = "collapseWorldQuests",
       label = "World Quests",
+      blacklistName = "World quest",
       tip = "Collapse the World Quest tracker.\nShows world quests on the map.\n|cffff9900Caution:|r May cause world map system taint. Off by default." },
     { key = "collapseProfessions",
       label = "Professions",
       tip = "Collapse the Profession Recipe tracker.\nShows active crafting work orders and profession recipes." },
     { key = "collapseMonthlyActivities",
       label = "Monthly",
+      blacklistName = "Monthly activities",
       tip = "Collapse the Monthly Activities tracker.\nShows seasonal event and monthly quest progress bars.\n|cffff9900Caution:|r UIWidget status bars can cause taint. Off by default." },
     { key = "collapseUIWidgets",
       label = "Widgets",
+      blacklistName = "UI widgets",
       tip = "Collapse the UI Widget objective tracker.\nShows general widget-based objectives.\n|cffff9900Caution:|r Directly manages widget pool frames — can cause taint. Off by default." },
     { key = "collapseAdventureMaps",
       label = "Adventure",
+      blacklistName = "Adventure map",
       tip = "Collapse the Adventure Map Quest tracker.\nShows objectives from the adventure map.\n|cffff9900Caution:|r Can cause world map system taint. Off by default." },
 }
+
+-- Returns true when the section's tracker is in the runtime TAINT_BLACKLIST.
+local function IsSectionBlacklisted(section)
+    return section.blacklistName and ns.TAINT_BLACKLIST and ns.TAINT_BLACKLIST[section.blacklistName] == true
+end
 
 local CONTAINER_H    = 107
 local CONTAINER_STEP = 112
@@ -273,33 +288,36 @@ local function BuildContainer(parent, instanceInfo, yTopLeft, isLegacy)
         getProfile()[self.key].enabled = self:GetChecked()
     end)
 
-    -- Tracker checkboxes — row 1
-    for j, section in ipairs(SECTIONS_ROW1) do
-        local cb = CreateFrame("CheckButton", nil, container, "InterfaceOptionsCheckButtonTemplate")
-        cb:SetPoint("TOPLEFT", container, "TOPLEFT", 5 + (j - 1) * 120, -28)
-        cb.Text:SetText(section.label)
-        cb.instanceKey = instanceInfo.key
-        cb.sectionKey  = section.key
-        Tip(cb, section.label, section.tip)
-        cb:SetScript("OnClick", function(self)
-            getProfile()[self.instanceKey][self.sectionKey] = self:GetChecked()
-        end)
-        container[section.key] = cb
+    -- Build a single tracker checkbox row; gates blacklisted entries to inert + grayed.
+    local function BuildSectionRow(sections, yOffset)
+        for j, section in ipairs(sections) do
+            local cb = CreateFrame("CheckButton", nil, container, "InterfaceOptionsCheckButtonTemplate")
+            cb:SetPoint("TOPLEFT", container, "TOPLEFT", 5 + (j - 1) * 120, yOffset)
+            cb.instanceKey = instanceInfo.key
+            cb.sectionKey  = section.key
+            local blacklisted = IsSectionBlacklisted(section)
+            if blacklisted then
+                cb.Text:SetText(section.label .. " |cff808080(blacklisted)|r")
+                cb:Disable()
+                cb.Text:SetTextColor(0.5, 0.5, 0.5)
+                Tip(cb, section.label,
+                    "|cffff5555Disabled — '" .. section.blacklistName .. "' is in the runtime taint blacklist.|r",
+                    "Toggling has no effect; the addon will not collapse or expand this tracker until the blacklist entry is removed.",
+                    "Original tip:",
+                    section.tip)
+            else
+                cb.Text:SetText(section.label)
+                Tip(cb, section.label, section.tip)
+                cb:SetScript("OnClick", function(self)
+                    getProfile()[self.instanceKey][self.sectionKey] = self:GetChecked()
+                end)
+            end
+            container[section.key] = cb
+        end
     end
 
-    -- Tracker checkboxes — row 2
-    for j, section in ipairs(SECTIONS_ROW2) do
-        local cb = CreateFrame("CheckButton", nil, container, "InterfaceOptionsCheckButtonTemplate")
-        cb:SetPoint("TOPLEFT", container, "TOPLEFT", 5 + (j - 1) * 120, -50)
-        cb.Text:SetText(section.label)
-        cb.instanceKey = instanceInfo.key
-        cb.sectionKey  = section.key
-        Tip(cb, section.label, section.tip)
-        cb:SetScript("OnClick", function(self)
-            getProfile()[self.instanceKey][self.sectionKey] = self:GetChecked()
-        end)
-        container[section.key] = cb
-    end
+    BuildSectionRow(SECTIONS_ROW1, -28)
+    BuildSectionRow(SECTIONS_ROW2, -50)
 
     -- Thin separator before nameplate option
     local npSep = container:CreateTexture(nil, "BACKGROUND")
@@ -525,9 +543,9 @@ local function CreateBasicOptionsPanel()
     Tip(filterQuestsByZoneCheck, "Filter Tracked Quests by Zone",
         "Adjusts which quests appear in your tracker based on your current zone.",
         "Quests with objectives or map markers here are tracked; others are untracked.",
-        "Triggers after a zone change when you start moving, mount/dismount, cast a spell, or interact with the quest tracker.",
-        "Use |cffffcc00/qlc filterzone|r to trigger manually.",
-        "|cffff9900Note:|r Your original tracked-quest list is saved and can be restored by disabling this option.")
+        "After a zone change, run the filter by clicking the quest tracker minimize button or using |cffffcc00/qlc filterzone|r.",
+        "|cffff9900Note:|r Your original tracked-quest list is saved and can be restored by disabling this option.",
+        "|cffff9900Note:|r ADDON_ACTION_BLOCKED on Button:SetPassThroughButtons may still appear during super-tracking refresh; this is unavoidable when an addon manipulates the watch list.")
 
     -- Mode dropdown (same row, to the right of the checkbox label)
     local filterModeLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
