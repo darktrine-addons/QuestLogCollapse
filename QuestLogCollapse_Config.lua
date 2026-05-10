@@ -1,6 +1,6 @@
 -- QuestLogCollapse Configuration Panel
 -- Author: Gaspode
--- Version: 1.4.0-beta4
+-- Version: 1.4.0-beta5
 
 local addonName, ns = ...
 
@@ -297,14 +297,18 @@ local function BuildContainer(parent, instanceInfo, yTopLeft, isLegacy)
             cb.sectionKey  = section.key
             local blacklisted = IsSectionBlacklisted(section)
             if blacklisted then
-                cb.Text:SetText(section.label .. " |cff808080(blacklisted)|r")
+                -- "(blacklisted)" suffix overflows the 120px column into adjacent
+                -- entries (see screenshot from 1.4.0-beta4). Use a small orange
+                -- asterisk instead and explain it in the tooltip.
+                cb.Text:SetText(section.label .. " |cffffaa00*|r")
                 cb:Disable()
+                cb:SetMotionScriptsWhileDisabled(true)  -- keep OnEnter/OnLeave firing for tooltip
                 cb.Text:SetTextColor(0.5, 0.5, 0.5)
-                Tip(cb, section.label,
-                    "|cffff5555Disabled — '" .. section.blacklistName .. "' is in the runtime taint blacklist.|r",
-                    "Toggling has no effect; the addon will not collapse or expand this tracker until the blacklist entry is removed.",
-                    "Original tip:",
-                    section.tip)
+                Tip(cb, section.label .. " |cffffaa00*|r (blacklisted)",
+                    "|cffffaa00This tracker is in the runtime taint blacklist; the toggle has no effect.|r",
+                    "Reason: " .. (section.tip or ""),
+                    " ",
+                    "The |cffffaa00*|r in the label marks a blacklisted entry. The setting in your saved variables is left untouched, so removing the blacklist entry restores the toggle without losing your previous value.")
             else
                 cb.Text:SetText(section.label)
                 Tip(cb, section.label, section.tip)
