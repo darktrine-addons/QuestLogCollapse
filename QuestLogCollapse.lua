@@ -17,6 +17,9 @@ QuestLogCollapse:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 QuestLogCollapse:RegisterEvent("PLAYER_REGEN_DISABLED")
 QuestLogCollapse:RegisterEvent("PLAYER_REGEN_ENABLED")
 QuestLogCollapse:RegisterEvent("PLAYER_ENTERING_WORLD")
+QuestLogCollapse:RegisterEvent("PLAYER_STARTED_MOVING")
+QuestLogCollapse:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+QuestLogCollapse:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 
 -- Trackers that must never be collapsed from addon Lua code.
 -- SetCollapsed() on any tracker that contains UIWidget-based content (status bars,
@@ -108,6 +111,17 @@ local questTrackingState = {
 -- Track if zone filtering is needed (set on zone change, cleared when filtering runs)
 -- This flag approach allows the filter to run from hardware-initiated events without taint
 local needsZoneFilter = false
+
+-- Tracks whether we've installed the HookScript on the objective tracker's
+-- minimize button. Kept as a file-local rather than as a field on the
+-- Blizzard ObjectiveTrackerFrame: writing custom keys onto a Blizzard frame
+-- from addon-tainted code marks the frame's table as tainted, which
+-- subsequently blocks ANY protected operation dispatched against it
+-- (e.g. Frame:Show via the ObjectiveTrackerManager mixin chain when the
+-- world map opens). That was the actual root cause of the
+-- ADDON_ACTION_BLOCKED Frame:Show reports — predates the recent
+-- super-tracking and tooltip-frameWidth diagnoses.
+local minimizeButtonHooked = false
 
 -- Default settings
 local defaults = {
@@ -218,24 +232,12 @@ local function SafeCollapseTracker(tracker, name, shouldCollapse)
                     -- Add to taint blacklist for this session
                     TAINT_BLACKLIST[name] = true
                 else
-                    DebugPrint("Method 1 failed for " .. name .. ": " .. tostring(err))
-                    
-                    -- Method 2: Try using the collapsed property directly
-                    local ok2, err2 = pcall(function()
-                        if tracker then
-                            tracker.collapsed = true
-                            if tracker.Update then
-                                tracker:Update()
-                            end
-                        end
-                    end)
-                    
-                    if ok2 then
-                        DebugPrint(name .. " section collapsed using property method")
-                        success = true
-                    else
-                        DebugPrint("All methods failed for " .. name .. ": " .. tostring(err2))
-                    end
+                    -- Don't try a `tracker.collapsed = true` direct property write as a
+                    -- fallback — that taints the Blizzard tracker frame just as badly as
+                    -- the SetCollapsed API call, and re-fires every collapse attempt that
+                    -- happens to error non-tainfully. Leave the tracker in whatever state
+                    -- SetCollapsed left it.
+                    DebugPrint("SetCollapsed failed for " .. name .. ": " .. tostring(err) .. " (no fallback — direct property write would taint)")
                 end
             end
         end)
@@ -403,24 +405,9 @@ local function SafeExpandTracker(tracker, name)
                     -- Add to taint blacklist for this session
                     TAINT_BLACKLIST[name] = true
                 else
-                    DebugPrint("Method 1 failed for " .. name .. ": " .. tostring(err))
-                    
-                    -- Method 2: Try using the collapsed property directly
-                    local ok2, err2 = pcall(function()
-                        if tracker then
-                            tracker.collapsed = false
-                            if tracker.Update then
-                                tracker:Update()
-                            end
-                        end
-                    end)
-                    
-                    if ok2 then
-                        DebugPrint(name .. " section expanded using property method")
-                        success = true
-                    else
-                        DebugPrint("All methods failed for " .. name .. ": " .. tostring(err2))
-                    end
+                    -- Don't try a `tracker.collapsed = false` direct property write as a
+                    -- fallback — same anti-pattern as SafeCollapseTracker's removed Method 2.
+                    DebugPrint("SetCollapsed(false) failed for " .. name .. ": " .. tostring(err) .. " (no fallback — direct property write would taint)")
                 end
             end
         end)
@@ -506,13 +493,12 @@ local function ExpandQuestLog()
 end
 
 -- Filter quests by current zone.
--- Calls C_QuestLog.{Add,Remove}QuestWatch synchronously so the protected pin
--- acquisition chain that follows runs under the same Lua frame as the trigger
--- (vs. an async C_Timer task that always runs purely insecure). Even hardware-
--- initiated triggers can't fully eliminate the resulting ADDON_ACTION_BLOCKED
--- on Button:SetPassThroughButtons during super-tracking refresh, but limiting
--- callers to the minimize-button HookScript and the /qlc filterzone slash
--- command minimizes how often it surfaces.
+-- Runs synchronously (no C_Timer.After deferral): the watch-list mutation
+-- happens in the same Lua frame as the trigger, which keeps reasoning about
+-- taint propagation simple. The C_Timer.After(0.5, ...) wrapper that was
+-- here historically didn't add taint protection (deferred work runs in a
+-- pure-insecure context anyway) — it just made the call timing harder to
+-- reason about.
 local function FilterQuestsByZone()
     -- NEVER do anything during combat to avoid taint
     if InCombatLockdown() then
@@ -668,11 +654,12 @@ local function OnZoneChanged()
     local profile = (ns.GetCurrentQLCProfile and ns.GetCurrentQLCProfile()) or QuestLogCollapseDB
     
     -- Set flag for zone filtering. ZONE_CHANGED_NEW_AREA is a game event, so we don't
-    -- run the filter here directly; the next minimize-button click or /qlc filterzone
-    -- will pick up this flag and run FilterQuestsByZone synchronously from that trigger.
+    -- run the filter here directly; the next user-action trigger (movement, spell-cast,
+    -- mount toggle, tracker minimize/expand, or /qlc filterzone) picks up this flag
+    -- and runs FilterQuestsByZone synchronously from that trigger.
     if profile and profile.filterQuestsByZone then
         needsZoneFilter = true
-        DebugPrint("Zone changed - zone filter will run on next quest tracker minimize/expand or /qlc filterzone")
+        DebugPrint("Zone changed - zone filter will run on next user action (movement, spell, mount, tracker click, or /qlc filterzone)")
     end
     
     if not profile or not profile.enabled then
@@ -910,6 +897,23 @@ QuestLogCollapse:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
         -- Handle combat options
         OnCombatStateChanged(event)
+    elseif event == "PLAYER_STARTED_MOVING" then
+        -- Player movement after a zone change (typically WASD/click-to-move keystroke)
+        if needsZoneFilter and not InCombatLockdown() then
+            DebugPrint("Player started moving - running pending zone filter")
+            FilterQuestsByZone()
+        end
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        local unitTarget = ...
+        if unitTarget == "player" and needsZoneFilter and not InCombatLockdown() then
+            DebugPrint("Player cast spell/ability - running pending zone filter")
+            FilterQuestsByZone()
+        end
+    elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+        if needsZoneFilter and not InCombatLockdown() then
+            DebugPrint("Player mount state changed - running pending zone filter")
+            FilterQuestsByZone()
+        end
     end
 end)
 
@@ -960,11 +964,12 @@ function SlashCmdList.QUESTLOGCOLLAPSE(msg)
         print("• Use |cffff0000/qlc expand|r during combat to cancel queued operations")
         print("")
         print("|cff00ff00Zone Filtering:|r")
-        print("• Filter triggers on:")
+        print("• When enabled, zone filtering triggers automatically when you:")
         print("  - Interact with the quest tracker (minimize/expand)")
-        print("  - |cffff0000/qlc filterzone|r (manual)")
-        print("• Other auto-triggers were dropped to limit ADDON_ACTION_BLOCKED")
-        print("  on Button:SetPassThroughButtons during super-tracking refresh.")
+        print("  - Start moving after a zone change")
+        print("  - Cast any spell/ability (including dynamic flight)")
+        print("  - Mount or dismount")
+        print("• You can also manually trigger with |cffff0000/qlc filterzone|r")
         print("Available sections: quests, achievements, bonus, scenarios,")
         print("campaigns, professions, monthly, widgets, adventuremaps")
     elseif args[1] == "toggle" then
@@ -1180,32 +1185,36 @@ end
 -- registered frames receive it as sibling OnEvent calls, not nested inside the protected chain.
 -- Should be tested in isolation before adding back.
 
--- Hook Quest Log / Objective Tracker interaction
+-- Hook the objective tracker's minimize button (hardware-initiated user click).
+-- Modern retail moved the minimize button from `ObjectiveTrackerFrame.HeaderMenu`
+-- to `ObjectiveTrackerFrame.Header`; we probe both rather than hard-code one.
+local function FindTrackerMinimizeButton()
+    local OT = ObjectiveTrackerFrame
+    if not OT then return nil end
+    if OT.Header     and OT.Header.MinimizeButton     then return OT.Header.MinimizeButton     end
+    if OT.HeaderMenu and OT.HeaderMenu.MinimizeButton then return OT.HeaderMenu.MinimizeButton end
+    if OT.MinimizeButton                              then return OT.MinimizeButton            end
+    return nil
+end
+
 C_Timer.After(1, function()
     local function HookQuestLog()
-        -- Modern WoW uses ObjectiveTrackerFrame
-        if ObjectiveTrackerFrame then
-            if not ObjectiveTrackerFrame.qlcHooked then
-                -- Hook the minimize/maximize button click which is hardware-initiated
-                if ObjectiveTrackerFrame.HeaderMenu and ObjectiveTrackerFrame.HeaderMenu.MinimizeButton then
-                    ObjectiveTrackerFrame.HeaderMenu.MinimizeButton:HookScript("OnMouseDown", function()
-                        DebugPrint("Quest tracker interacted with - checking for pending zone filter")
-                        TryRunZoneFilter()
-                    end)
-                end
-                ObjectiveTrackerFrame.qlcHooked = true
-                DebugPrint("Hooked ObjectiveTrackerFrame for zone filtering")
-            end
-            return true
-        end
-        return false
+        if minimizeButtonHooked then return true end
+        local btn = FindTrackerMinimizeButton()
+        if not btn then return false end
+        btn:HookScript("OnMouseDown", function()
+            DebugPrint("Quest tracker interacted with - checking for pending zone filter")
+            TryRunZoneFilter()
+        end)
+        minimizeButtonHooked = true
+        DebugPrint("Hooked tracker minimize button for zone filtering")
+        return true
     end
-    
-    -- Try hooking immediately
+
     if not HookQuestLog() then
-        -- If ObjectiveTrackerFrame doesn't exist yet, keep trying
         local attempts = 0
-        local ticker = C_Timer.NewTicker(1, function()
+        local ticker
+        ticker = C_Timer.NewTicker(1, function()
             attempts = attempts + 1
             if HookQuestLog() or attempts > 30 then
                 ticker:Cancel()
@@ -1216,4 +1225,7 @@ end)
 
 DebugPrint("QuestLogCollapse: Zone filtering hooks initialized")
 DebugPrint("  - Quest tracker interaction (minimize/expand) will trigger pending filters")
+DebugPrint("  - Player movement will trigger pending filters")
+DebugPrint("  - Spell/ability cast will trigger pending filters")
+DebugPrint("  - Mounting/dismounting will trigger pending filters")
 DebugPrint("  - /qlc filterzone will trigger filters manually")

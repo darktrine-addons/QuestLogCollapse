@@ -159,12 +159,15 @@ QuestLogCollapse/
 
 ### Zone Filtering Triggers
 
-`C_QuestLog.AddQuestWatch` / `RemoveQuestWatch` called from any addon Lua frame leaves taint on the super-tracking refresh chain, which downstream blocks `Button:SetPassThroughButtons` (`ADDON_ACTION_BLOCKED`). The filter triggers are restricted to the two paths that minimize how often this surfaces:
+Zone changes set a "needs filter" flag; the filter runs on the next user-action trigger that picks up the flag:
 
-- **Quest Tracker Interaction** - Run when you minimize or expand the objective tracker
+- **Quest Tracker Interaction** - Triggers when you interact with the objective tracker (minimize/expand)
+- **Player Movement** - Triggers when you start moving after a zone change
+- **Spell/Ability Use** - Triggers when you cast any spell or ability (including dynamic flight abilities)
+- **Mounting/Dismounting** - Triggers when your mount state changes
 - **Manual Command** - Use `/qlc filterzone` to trigger anytime
 
-Zone changes only set a "needs filter" flag; the filter runs on the next interaction/manual trigger above. Movement, spell-cast, and mount auto-triggers were removed in 1.4.0 because they reproduced the same taint chain without adding genuinely-secure execution context.
+The filter runs synchronously from the trigger event — no `C_Timer.After` deferral.
 
 ### Database Structure
 

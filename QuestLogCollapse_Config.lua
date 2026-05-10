@@ -543,9 +543,9 @@ local function CreateBasicOptionsPanel()
     Tip(filterQuestsByZoneCheck, "Filter Tracked Quests by Zone",
         "Adjusts which quests appear in your tracker based on your current zone.",
         "Quests with objectives or map markers here are tracked; others are untracked.",
-        "After a zone change, run the filter by clicking the quest tracker minimize button or using |cffffcc00/qlc filterzone|r.",
-        "|cffff9900Note:|r Your original tracked-quest list is saved and can be restored by disabling this option.",
-        "|cffff9900Note:|r ADDON_ACTION_BLOCKED on Button:SetPassThroughButtons may still appear during super-tracking refresh; this is unavoidable when an addon manipulates the watch list.")
+        "Triggers automatically after a zone change when you start moving, mount/dismount, cast a spell, or interact with the quest tracker.",
+        "Use |cffffcc00/qlc filterzone|r to trigger manually.",
+        "|cffff9900Note:|r Your original tracked-quest list is saved and can be restored by disabling this option.")
 
     -- Mode dropdown (same row, to the right of the checkbox label)
     local filterModeLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
