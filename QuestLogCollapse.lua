@@ -37,8 +37,8 @@ local TAINT_BLACKLIST = {
     ["Monthly activities"]  = true,  -- MonthlyActivitiesObjectiveTracker: UIWidget status bars for seasonal/event progress
     ["Adventure map"]      = true,  -- AdventureMapQuestObjectiveTracker: causes world map taint (collapseAdventureMaps defaults false; safety net for users who enable it)
     ["World quest"]        = true,  -- WorldQuestObjectiveTracker: causes map system taint (collapseWorldQuests defaults false; safety net for users who enable it)
-    ["Bonus objectives"]   = true,  -- BonusObjectiveTracker: SetCollapsed taints UIWidget pool frame widths → LayoutFrame:491 "secret number" on Area POI tooltips
-    ["Quest"]              = true,  -- QuestObjectiveTracker: tracked quests with UIWidget content (e.g. delve coffer-key timers) taint widget pool frame dimensions → Blizzard_UIWidgetTemplateTextWithState:35 "secret number" on Area POI tooltips (widgetSetID=1800, type=8)
+    ["Quest"]              = true,  -- QuestObjectiveTracker: SetCollapsed taints widget pool frame dimensions when the tracker holds quests with embedded reward / UIWidget content. Reproduced after 94df168 (frame-write fix) with a tracked World Quest: 38× "attempt to perform arithmetic on a secret number value" at Blizzard_GameTooltip/Mainline/GameTooltip.lua:754 (EmbeddedItemTooltip_UpdateSize) on hover of any World Quest pin. Also surfaces at LayoutFrame:491 / UIWidgetTemplateTextWithState:35 in other contexts (Area POI tooltips, delve coffer-key timers). Confirmed real, not an artefact of the field-write taint.
+    ["Bonus objectives"]   = true,  -- BonusObjectiveTracker: SetCollapsed taints UIWidget pool frame widths → LayoutFrame:491 "secret number" on Area POI tooltips. Kept conservatively — same class of bug as Quest (which was confirmed to persist after 94df168), unlikely to be benign when Quest isn't.
 }
 
 -- Helper function to check if a value is tainted

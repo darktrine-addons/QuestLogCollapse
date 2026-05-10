@@ -1,6 +1,6 @@
 -- QuestLogCollapse Configuration Panel
 -- Author: Gaspode
--- Version: 1.4.0-beta3
+-- Version: 1.4.0-beta4
 
 local addonName, ns = ...
 
@@ -417,6 +417,15 @@ local function BuildContainerPanel(titleText, typeList, isLegacyStyle)
         end
     end
     subPanel:HookScript("OnShow", subPanel.OnShow)
+    -- Also hand the same logic to OnRefresh, the documented Settings-system hook
+    -- (in case the canvas-layout dispatch ever skips the OnShow transition).
+    subPanel.OnRefresh = subPanel.OnShow
+
+    -- Hide after construction. CreateFrame returns a frame in shown state, so
+    -- the first Settings.OpenToCategory call would call frame:Show() as a no-op
+    -- and OnShow would never fire — leaving the checkboxes at their default
+    -- unticked state until a hide/show round-trip via category switching.
+    subPanel:Hide()
 
     return subPanel
 end
@@ -646,6 +655,11 @@ local function CreateBasicOptionsPanel()
     end
 
     basicPanel:HookScript("OnShow", basicPanel.OnShow)
+    basicPanel.OnRefresh = basicPanel.OnShow
+
+    -- See BuildContainerPanel — same reason: hide so the first Settings.Show()
+    -- actually transitions visibility and fires OnShow.
+    basicPanel:Hide()
 
     -- --------------------------------------------------------
     -- GLOBAL CHECKBOX HANDLERS
